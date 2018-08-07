@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../OnePenguin.Essentials/OnePenguin.Essentials.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Neo4j.Driver" Version="1.6.1"/>
+    <PackageReference Include="System.Collections" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.Extensions.Configuration" />
+  </ItemGroup>
+</Project>
