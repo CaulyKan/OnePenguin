@@ -1,18 +1,37 @@
+using System;
 using System.Collections.Generic;
 
 namespace OnePenguin.Essentials {
     public class BasePenguin : PenguinReference
     {
-        public string TypeName {get;}
+        public string TypeName 
+        {
+            get 
+            {
+                return this.Datastore.TypeName;
+            }
+        }
 
         public BasePenguin(string typeName)
         {
-            this.TypeName = typeName;
+            this.Datastore = new Datastore(typeName);
+            this.DirtyDatastore = new Datastore(typeName);
         }
 
-        protected Datastore Datastore {get;set;} = new Datastore();
+        public BasePenguin(long id, Datastore datastore) : this(datastore.TypeName)
+        {
+            this.ID = id;
+            this.Datastore = datastore;
+        }
 
-        protected Datastore DirtyDatastore {get;set;} = new Datastore();
+        public TPenguin As<TPenguin>() where TPenguin: BasePenguin
+        {
+            return Activator.CreateInstance(typeof(TPenguin), new { this.ID, this.Datastore }) as TPenguin;
+        }
+
+        public Datastore Datastore {get;set;}
+
+        public Datastore DirtyDatastore {get;set;}
     }
 
     public class PenguinReference : IPenguinReference
@@ -27,8 +46,17 @@ namespace OnePenguin.Essentials {
 
     public class Datastore
     {
-        public Dictionary<string, object> Attributes;
+        public Datastore(string typeName) 
+        {
+            this.TypeName = typeName;
+        }
 
-        public Dictionary<string, List<long>> Relations;
+        public string TypeName {get;set;}
+
+        public Dictionary<string, object> Attributes = new Dictionary<string, object>();
+
+        public Dictionary<string, List<long>> RelationsIn = new Dictionary<string, List<long>>();
+
+        public Dictionary<string, List<long>> RelationsOut = new Dictionary<string, List<long>>();
     }
 }

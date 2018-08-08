@@ -18,7 +18,13 @@ namespace OnePenguin.Service.Persistence
 
         List<TPenguin> Query<TPenguin>(string query) where TPenguin: BasePenguin;
 
-        void RunContext(Action<IPenguinPersistenceContext> contextAction);
+        void RunTransaction(Action<IPenguinPersistenceContext> contextAction);
+
+        IPenguinPersistenceContext StartTransaction();
+
+        void Commit();
+        
+        void Rollback();
     }
 
     public interface IPenguinPersistenceContext : IDisposable
@@ -46,9 +52,5 @@ namespace OnePenguin.Service.Persistence
         void Delete<TPenguin>(TPenguin penguin) where TPenguin: BasePenguin;
 
         void Delete<TPenguin>(List<TPenguin> penguins) where TPenguin: BasePenguin;
-
-        void Commit();
-
-        void Rollback();
     }
 }
