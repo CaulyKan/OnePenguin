@@ -22,7 +22,19 @@ namespace OnePenguin.Service.Persistence.Neo4jPersistenceDriver
 
         public BasePenguin GetById(long id)
         {
-            throw new System.NotImplementedException();
+            try
+            {
+                using (var session = driver.Session())
+                {
+                    var result = session.Run("MATCH ()-[relations_in]->(obj)-[relations_out]->() WHERE ID(obj)=$id RETURN obj, relations_in, relations_out", new { id });
+
+                    return Neo4jConverter.ConvertToPenguin(result);
+                }
+            }
+            catch (Exception e)
+            {
+                throw new PersistenceException($"{nameof(Neo4jPersistenceDriver)}: GetById({id}) failed: {e.Message}", e);
+            }
         }
 
         public List<BasePenguin> GetById(List<long> id)
