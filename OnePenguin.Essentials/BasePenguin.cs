@@ -32,6 +32,14 @@ namespace OnePenguin.Essentials {
         public Datastore Datastore {get;set;}
 
         public Datastore DirtyDatastore {get;set;}
+
+        public bool IsDirty 
+        {
+            get 
+            {
+                return !(DirtyDatastore.Attributes.Count == 0 && DirtyDatastore.RelationsIn.Count == 0 && DirtyDatastore.RelationsOut.Count == 0);
+            }
+        }
     }
 
     public class PenguinReference : IPenguinReference

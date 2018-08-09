@@ -3,21 +3,26 @@ using Neo4j.Driver.V1;
 using OnePenguin.Essentials;
 using Microsoft.Extensions.Configuration;
 using System;
+using Microsoft.Extensions.Logging.Debug;
+using Microsoft.Extensions.Logging;
 
 namespace OnePenguin.Service.Persistence.Neo4jPersistenceDriver
 {
     public class Neo4jPersistenceDriver : IPenguinPersistenceDriver
     {
+        private readonly Microsoft.Extensions.Logging.ILogger logger;
         private IDriver driver;
 
-        public Neo4jPersistenceDriver(IConfiguration config)
-        {
-            driver = GraphDatabase.Driver(config["neo4j_uri"], AuthTokens.Basic(config["neo4j_user"], config["neo4j_passwd"]));
-        }
+        public Neo4jPersistenceDriver(IConfiguration config) : this(config["neo4j_uri"], config["neo4j_user"], config["neo4j_passwd"]) { }
 
         public Neo4jPersistenceDriver(string uri, string user, string passwd)
         {
-            driver = GraphDatabase.Driver(uri, AuthTokens.Basic(user, passwd));
+            var loggerFactory = new Microsoft.Extensions.Logging.LoggerFactory();
+            loggerFactory.AddProvider(new DebugLoggerProvider((text, logLevel) => logLevel >= Microsoft.Extensions.Logging.LogLevel.Debug));
+            logger = loggerFactory.CreateLogger(nameof(Neo4jPersistenceDriver));
+
+            driver = GraphDatabase.Driver(uri, AuthTokens.Basic(user, passwd),
+                                          new Config { Logger = new Neo4jPersistenceDriverLogger(Neo4j.Driver.V1.LogLevel.Debug, logger) });
         }
 
         public BasePenguin GetById(long id)
@@ -36,6 +41,7 @@ namespace OnePenguin.Service.Persistence.Neo4jPersistenceDriver
             }
             catch (Exception e)
             {
+                logger.LogError(e, $"{nameof(Neo4jPersistenceDriver)}: GetById({id}) failed: {e.Message}");
                 throw new PersistenceException($"{nameof(Neo4jPersistenceDriver)}: GetById({id}) failed: {e.Message}", e);
             }
         }
@@ -183,6 +189,39 @@ namespace OnePenguin.Service.Persistence.Neo4jPersistenceDriver
         public List<TPenguin> Update<TPenguin>(List<TPenguin> penguins) where TPenguin : BasePenguin
         {
             throw new System.NotImplementedException();
+        }
+    }
+
+    public class Neo4jPersistenceDriverLogger : Neo4j.Driver.V1.ILogger
+    {
+        public Neo4jPersistenceDriverLogger(Neo4j.Driver.V1.LogLevel level, Microsoft.Extensions.Logging.ILogger logger) 
+        {
+            this.Level = level;
+            this.logger = logger;
+        }
+
+        public Neo4j.Driver.V1.LogLevel Level { get; set; }
+
+        private readonly Microsoft.Extensions.Logging.ILogger logger;
+
+        public void Debug(string message, params object[] restOfMessage)
+        {
+            logger.LogDebug(message, restOfMessage);
+        }
+
+        public void Error(string message, Exception cause = null, params object[] restOfMessage)
+        {
+            logger.LogError(message, cause, restOfMessage);
+        }
+
+        public void Info(string message, params object[] restOfMessage)
+        {
+            logger.LogInformation(message, restOfMessage);
+        }
+
+        public void Trace(string message, params object[] restOfMessage)
+        {
+            logger.LogTrace(message, restOfMessage);
         }
     }
 }
