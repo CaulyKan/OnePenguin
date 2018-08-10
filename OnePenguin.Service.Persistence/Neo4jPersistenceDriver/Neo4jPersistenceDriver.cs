@@ -151,7 +151,7 @@ namespace OnePenguin.Service.Persistence.Neo4jPersistenceDriver
 
         public List<BasePenguin> Insert(List<BasePenguin> penguins)
         {
-            try
+            try 
             {
                 return Neo4jPersistenceImpl.InsertPenguin(this.transaction, penguins);
             }
@@ -204,24 +204,31 @@ namespace OnePenguin.Service.Persistence.Neo4jPersistenceDriver
 
         private readonly Microsoft.Extensions.Logging.ILogger logger;
 
+        public string BuildMessage(string message, object[] restOfMessage)
+        {
+            var result = message;
+            foreach (var s in restOfMessage) message += "," + s.ToString();
+            return result;
+        }
+
         public void Debug(string message, params object[] restOfMessage)
         {
-            logger.LogDebug(message, restOfMessage);
+            logger.LogDebug(BuildMessage(message, restOfMessage), restOfMessage);
         }
 
         public void Error(string message, Exception cause = null, params object[] restOfMessage)
         {
-            logger.LogError(message, cause, restOfMessage);
+            logger.LogError(BuildMessage(message, restOfMessage), cause, restOfMessage);
         }
 
         public void Info(string message, params object[] restOfMessage)
         {
-            logger.LogInformation(message, restOfMessage);
+            logger.LogInformation(BuildMessage(message, restOfMessage), restOfMessage);
         }
 
         public void Trace(string message, params object[] restOfMessage)
         {
-            logger.LogTrace(message, restOfMessage);
+            logger.LogTrace(BuildMessage(message, restOfMessage), restOfMessage);
         }
     }
 }

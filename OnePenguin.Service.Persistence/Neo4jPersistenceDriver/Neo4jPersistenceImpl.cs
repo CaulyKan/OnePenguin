@@ -12,10 +12,9 @@ namespace OnePenguin.Service.Persistence.Neo4jPersistenceDriver
     {
         public static List<BasePenguin> GetPenguinById(ISession session, List<long> ids)
         {
-
             var objResult = session.Run("MATCH (obj) WHERE ID(obj) IN $ids RETURN obj", new { ids });
             var relationsResult = session.Run(
-                "MATCH (relatedObj)-[relation]->(obj) WHERE id(obj) IN $ids RETURN id(obj) as id, 'IN' AS direction, relatedObj, relation " + 
+                "MATCH (relatedObj)-[relation]->(obj) WHERE id(obj) IN $ids RETURN id(obj) as id, 'IN' AS direction, relatedObj, relation " +
                 "UNION MATCH (obj)-[relation]->(relatedObj) WHERE id(obj) IN $ids RETURN id(obj) as id, 'OUT' AS direction, relatedObj, relation", new { ids });
 
             var objs = objResult.Select(i => i["obj"].As<INode>()).ToList();
@@ -23,28 +22,29 @@ namespace OnePenguin.Service.Persistence.Neo4jPersistenceDriver
             if (objs.Count != ids.Count) throw new PersistenceException("Key not Exist:" + string.Join(",", ids.Except(objs.ConvertAll(i => i.Id))));
 
             var datastoreDic = new Dictionary<long, Datastore>();
-            objs.ForEach(i => {
+            objs.ForEach(i =>
+            {
                 var ds = new Datastore(i.Labels.First());
                 foreach (var kvp in i.Properties) ds.Attributes.Add(kvp.Key, kvp.Value);
                 datastoreDic.Add(i.Id, ds);
             });
 
-            foreach (var relationRecord in relationsResult) 
+            foreach (var relationRecord in relationsResult)
             {
                 long id = relationRecord["id"].As<long>();
                 var relation = relationRecord["relation"].As<IRelationship>();
                 if (relationRecord["direction"].As<string>() == "IN")
                 {
-                    datastoreDic[id].RelationsIn.CreateOrAddToList(relation.Type, relation.StartNodeId); 
+                    datastoreDic[id].RelationsIn.CreateOrAddToList(relation.Type, relation.StartNodeId);
                 }
-                else 
+                else
                 {
-                    datastoreDic[id].RelationsOut.CreateOrAddToList(relation.Type, relation.EndNodeId); 
+                    datastoreDic[id].RelationsOut.CreateOrAddToList(relation.Type, relation.EndNodeId);
                 }
             }
 
             var resultPenguins = datastoreDic.ToList().Select(i => new BasePenguin(i.Key, i.Value)).ToList();
-            
+
             return resultPenguins;
         }
 
@@ -56,26 +56,26 @@ namespace OnePenguin.Service.Persistence.Neo4jPersistenceDriver
             foreach (var groupedPenguins in penguinsToInsert.GroupBy(i => i.TypeName))
             {
                 var typeName = groupedPenguins.Key;
-                
+
                 var penguins = new List<BasePenguin>();
                 var relations = new List<object>();
 
-                foreach (var penguin in groupedPenguins) 
+                foreach (var penguin in groupedPenguins)
                 {
                     penguins.Add(penguin);
-                    penguin.DirtyDatastore.RelationsOut.ForEach(i => i.Value.ForEach(j => relations.Add(new { name = i.Key, from = penguin.ID, to = j})));
-                    penguin.DirtyDatastore.RelationsIn.ForEach(i => i.Value.ForEach(j => relations.Add(new { name = i.Key, from = j, to = penguin.ID})));
                 }
 
                 var insertResult = transaction.Run($"UNWIND $props AS properties CREATE (obj:{typeName}) SET obj = properties RETURN obj", new { props = penguins.ConvertAll(i => i.DirtyDatastore.Attributes) });
                 var insertedPenguins = insertResult.Select(i => i["obj"].As<INode>()).ToList();
 
-                for (int n = 0; n < penguins.Count; n++) {
-                    penguins[n].DirtyDatastore.RelationsOut.ForEach(i => i.Value.ForEach(j => relations.Add(new { name = i.Key, from = insertedPenguins[n].Id, to = j})));
-                    penguins[n].DirtyDatastore.RelationsIn.ForEach(i => i.Value.ForEach(j => relations.Add(new { name = i.Key, from = j, to = insertedPenguins[n].Id}))); 
+                for (int n = 0; n < penguins.Count; n++)
+                {
+                    penguins[n].DirtyDatastore.RelationsOut.ForEach(i => i.Value.ForEach(j => relations.Add(new { name = i.Key, from = insertedPenguins[n].Id, to = j })));
+                    penguins[n].DirtyDatastore.RelationsIn.ForEach(i => i.Value.ForEach(j => relations.Add(new { name = i.Key, from = j, to = insertedPenguins[n].Id })));
                 }
 
-                var insertRelations = transaction.Run("UNWIND $relations as relation MATCH (obj {id: relation.from}) MATCH (t {id: relation.to}) CALL apoc.create.relationship(obj, relation.name, NULL, t) YIELD rel RETURN rel", new { relations = relations });
+                if (relations.Count > 0)
+                    transaction.Run("UNWIND $relations as relation MATCH (a) WHERE id(a)=relation.from WITH a, relation MATCH (b) WHERE id(b)=relation.to CALL apoc.create.relationship(a, relation.name, NULL, b) YßIELD rel RETURN rel", new { relations });
 
                 for (var i = 0; i < penguins.Count; i++)
                 {

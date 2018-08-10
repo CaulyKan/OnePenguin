@@ -42,6 +42,19 @@ namespace OnePenguin.Essentials {
         }
     }
 
+    public class BasePenguinRelationship 
+    {
+        public string RelationName { get; set; }
+
+
+    }
+
+    public enum PenguinRelationshipDirection
+    {
+        IN,
+        OUT
+    }
+
     public class PenguinReference : IPenguinReference
     {
         public long? ID {get;set;} = null;

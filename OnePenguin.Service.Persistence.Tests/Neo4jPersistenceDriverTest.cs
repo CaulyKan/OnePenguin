@@ -26,19 +26,20 @@ namespace OnePenguin.Service.Persistence.Tests
             penguin.DirtyDatastore.Attributes.Add("BoolProp", false);
 
             BasePenguin insertedPenguin = null;
-            
-            this.driver.RunTransaction(context => {
+
+            this.driver.RunTransaction(context =>
+            {
                 insertedPenguin = context.Insert(penguin);
             });
 
             Assert.True(insertedPenguin != null);
             Assert.True(insertedPenguin.ID.HasValue);
-            
+
             var getPenguin = this.driver.GetById(insertedPenguin.ID.Value);
             Assert.Equal("StringValue", insertedPenguin.Datastore.Attributes["StringProp"]);
             Assert.Equal("StringValue", getPenguin.Datastore.Attributes["StringProp"]);
             Assert.Equal(123, insertedPenguin.Datastore.Attributes["IntProp"]);
-            Assert.Equal(123, (long) getPenguin.Datastore.Attributes["IntProp"]);
+            Assert.Equal(123, (long)getPenguin.Datastore.Attributes["IntProp"]);
             Assert.Equal(false, insertedPenguin.Datastore.Attributes["BoolProp"]);
             Assert.Equal(false, getPenguin.Datastore.Attributes["BoolProp"]);
             Assert.False(insertedPenguin.IsDirty);
@@ -50,7 +51,8 @@ namespace OnePenguin.Service.Persistence.Tests
         {
             var relatedPenguins = new List<BasePenguin> { new BasePenguin("in"), new BasePenguin("in"), new BasePenguin("out") };
 
-            this.driver.RunTransaction(context => {
+            this.driver.RunTransaction(context =>
+            {
                 relatedPenguins = context.Insert(relatedPenguins);
             });
 
@@ -60,10 +62,10 @@ namespace OnePenguin.Service.Persistence.Tests
             penguin.DirtyDatastore.RelationsIn.CreateOrAddToList("rel_in", relatedPenguins[0].ID.Value);
             penguin.DirtyDatastore.RelationsIn.CreateOrAddToList("rel_in", relatedPenguins[1].ID.Value);
             penguin.DirtyDatastore.RelationsOut.CreateOrAddToList("rel_out", relatedPenguins[2].ID.Value);
-
             BasePenguin insertedPenguin = null;
 
-            this.driver.RunTransaction(context => {
+            this.driver.RunTransaction(context =>
+            {
                 insertedPenguin = context.Insert(penguin);
             });
 
@@ -76,7 +78,7 @@ namespace OnePenguin.Service.Persistence.Tests
             var getPenguin = driver.GetById(insertedPenguin.ID.Value);
             Assert.True(getPenguin.Datastore.RelationsIn.ContainsKey("rel_in") && getPenguin.Datastore.RelationsIn["rel_in"].Count == 2);
             Assert.True(getPenguin.Datastore.RelationsOut.ContainsKey("rel_out") && getPenguin.Datastore.RelationsOut["rel_out"].Count == 1);
-            Assert.True(getPenguin.Datastore.RelationsIn["rel_in"][0] == relatedPenguins[0].ID.Value && getPenguin.Datastore.RelationsIn["rel_in"][1] == relatedPenguins[1].ID.Value);
+            Assert.Equal(new[] { relatedPenguins[0], relatedPenguins[1] }.Select(i => i.ID.Value).OrderBy(i => i).ToList(), getPenguin.Datastore.RelationsIn["rel_in"].OrderBy(i => i).ToList());
             Assert.True(getPenguin.Datastore.RelationsOut["rel_out"][0] == relatedPenguins[2].ID.Value);
 
             relatedPenguins = driver.GetById(relatedPenguins.Select(i => i.ID.Value).ToList());
