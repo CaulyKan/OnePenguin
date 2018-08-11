@@ -27,17 +27,17 @@ namespace OnePenguin.Service.Persistence.Neo4jPersistenceDriver
 
         public BasePenguin GetById(long id)
         {
-            return this.GetById(new List<long> {id})[0];
+            return this.GetById(new List<long> { id })[0];
         }
 
         public List<BasePenguin> GetById(List<long> id)
         {
             try
             {
-                if (this.transactionInfo.Key != null) 
+                if (this.transactionInfo.Key != null)
                     return Neo4jPersistenceImpl.GetPenguinById(this.transactionInfo.Key, id);
                 else using (var session = driver.Session())
-                    return Neo4jPersistenceImpl.GetPenguinById(session, id);
+                        return Neo4jPersistenceImpl.GetPenguinById(session, id);
             }
             catch (Exception e)
             {
@@ -70,7 +70,8 @@ namespace OnePenguin.Service.Persistence.Neo4jPersistenceDriver
         {
             using (var session = driver.Session())
             {
-                session.WriteTransaction(tx => {
+                session.WriteTransaction(tx =>
+                {
                     var context = new Neo4jPersistenceContext(tx);
                     contextAction(context);
                 });
@@ -89,7 +90,7 @@ namespace OnePenguin.Service.Persistence.Neo4jPersistenceDriver
 
         public void Commit()
         {
-            if (transactionInfo.Value != null) 
+            if (transactionInfo.Value != null)
             {
                 this.transactionInfo.Value.CommitAsync().Wait();
                 this.transactionInfo.Value.Dispose();
@@ -146,18 +147,18 @@ namespace OnePenguin.Service.Persistence.Neo4jPersistenceDriver
 
         public BasePenguin Insert(BasePenguin penguin)
         {
-            return this.Insert(new List<BasePenguin> {penguin})[0];
+            return this.Insert(new List<BasePenguin> { penguin })[0];
         }
 
         public List<BasePenguin> Insert(List<BasePenguin> penguins)
         {
-            try 
+            try
             {
                 return Neo4jPersistenceImpl.InsertPenguin(this.transaction, penguins);
             }
-            catch (Exception e) 
+            catch (Exception e)
             {
-                throw new PersistenceException($"{nameof(Neo4jPersistenceDriver)}: InsertPenguin() failed: {e.Message}", e); 
+                throw new PersistenceException($"{nameof(Neo4jPersistenceDriver)}: InsertPenguin() failed: {e.Message}", e);
             }
         }
 
@@ -194,7 +195,7 @@ namespace OnePenguin.Service.Persistence.Neo4jPersistenceDriver
 
     public class Neo4jPersistenceDriverLogger : Neo4j.Driver.V1.ILogger
     {
-        public Neo4jPersistenceDriverLogger(Neo4j.Driver.V1.LogLevel level, Microsoft.Extensions.Logging.ILogger logger) 
+        public Neo4jPersistenceDriverLogger(Neo4j.Driver.V1.LogLevel level, Microsoft.Extensions.Logging.ILogger logger)
         {
             this.Level = level;
             this.logger = logger;

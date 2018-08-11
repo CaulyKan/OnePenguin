@@ -59,9 +59,9 @@ namespace OnePenguin.Service.Persistence.Tests
             Assert.True(relatedPenguins.All(i => i.ID.HasValue));
 
             var penguin = new BasePenguin("obj");
-            penguin.DirtyDatastore.RelationsIn.CreateOrAddToList("rel_in", relatedPenguins[0].ID.Value);
-            penguin.DirtyDatastore.RelationsIn.CreateOrAddToList("rel_in", relatedPenguins[1].ID.Value);
-            penguin.DirtyDatastore.RelationsOut.CreateOrAddToList("rel_out", relatedPenguins[2].ID.Value);
+            penguin.AddRelation(PenguinRelationshipDirection.IN, "rel_in", relatedPenguins[0].ID.Value);
+            penguin.AddRelation(PenguinRelationshipDirection.IN, "rel_in", relatedPenguins[1].ID.Value);
+            penguin.AddRelation(PenguinRelationshipDirection.OUT, "rel_out", relatedPenguins[2].ID.Value);
             BasePenguin insertedPenguin = null;
 
             this.driver.RunTransaction(context =>
@@ -70,21 +70,24 @@ namespace OnePenguin.Service.Persistence.Tests
             });
 
             Assert.True(insertedPenguin.ID.HasValue);
-            Assert.True(insertedPenguin.Datastore.RelationsIn.ContainsKey("rel_in") && insertedPenguin.Datastore.RelationsIn["rel_in"].Count == 2);
-            Assert.True(insertedPenguin.Datastore.RelationsOut.ContainsKey("rel_out") && insertedPenguin.Datastore.RelationsOut["rel_out"].Count == 1);
-            Assert.True(insertedPenguin.Datastore.RelationsIn["rel_in"][0] == relatedPenguins[0].ID.Value && insertedPenguin.Datastore.RelationsIn["rel_in"][1] == relatedPenguins[1].ID.Value);
-            Assert.True(insertedPenguin.Datastore.RelationsOut["rel_out"][0] == relatedPenguins[2].ID.Value);
+            Assert.True(insertedPenguin.Datastore.Relations.ContainsKey("rel_in") && insertedPenguin.Datastore.Relations["rel_in"].Count == 2);
+            Assert.True(insertedPenguin.Datastore.Relations.ContainsKey("rel_out") && insertedPenguin.Datastore.Relations["rel_out"].Count == 1);
+            Assert.Equal(new[] { relatedPenguins[0], relatedPenguins[1] }.Select(i => i.ID.Value).OrderBy(i => i).ToList(), insertedPenguin.Datastore.Relations["rel_in"].Select(i => i.Target.ID.Value).OrderBy(i => i).ToList());
+            Assert.True(insertedPenguin.Datastore.Relations["rel_out"][0].Target.ID.Value == relatedPenguins[2].ID.Value);
 
             var getPenguin = driver.GetById(insertedPenguin.ID.Value);
-            Assert.True(getPenguin.Datastore.RelationsIn.ContainsKey("rel_in") && getPenguin.Datastore.RelationsIn["rel_in"].Count == 2);
-            Assert.True(getPenguin.Datastore.RelationsOut.ContainsKey("rel_out") && getPenguin.Datastore.RelationsOut["rel_out"].Count == 1);
-            Assert.Equal(new[] { relatedPenguins[0], relatedPenguins[1] }.Select(i => i.ID.Value).OrderBy(i => i).ToList(), getPenguin.Datastore.RelationsIn["rel_in"].OrderBy(i => i).ToList());
-            Assert.True(getPenguin.Datastore.RelationsOut["rel_out"][0] == relatedPenguins[2].ID.Value);
+            Assert.True(getPenguin.Datastore.Relations.ContainsKey("rel_in") && getPenguin.Datastore.Relations["rel_in"].Count == 2);
+            Assert.True(getPenguin.Datastore.Relations.ContainsKey("rel_out") && getPenguin.Datastore.Relations["rel_out"].Count == 1);
+            Assert.Equal(new[] { relatedPenguins[0], relatedPenguins[1] }.Select(i => i.ID.Value).OrderBy(i => i).ToList(), getPenguin.Datastore.Relations["rel_in"].Select(i => i.Target.ID.Value).OrderBy(i => i).ToList());
+            Assert.True(getPenguin.Datastore.Relations["rel_out"][0].Target.ID.Value == relatedPenguins[2].ID.Value);
 
             relatedPenguins = driver.GetById(relatedPenguins.Select(i => i.ID.Value).ToList());
-            Assert.True(relatedPenguins[0].Datastore.RelationsOut.ContainsKey("rel_in") && relatedPenguins[0].Datastore.RelationsOut["rel_in"][0] == insertedPenguin.ID.Value);
-            Assert.True(relatedPenguins[1].Datastore.RelationsOut.ContainsKey("rel_in") && relatedPenguins[1].Datastore.RelationsOut["rel_in"][0] == insertedPenguin.ID.Value);
-            Assert.True(relatedPenguins[2].Datastore.RelationsIn.ContainsKey("rel_out") && relatedPenguins[2].Datastore.RelationsIn["rel_out"][0] == insertedPenguin.ID.Value);
+            Assert.True(relatedPenguins[0].Datastore.Relations.ContainsKey("rel_in") && relatedPenguins[0].Datastore.Relations["rel_in"][0].Target.ID.Value == insertedPenguin.ID.Value);
+            Assert.Equal(PenguinRelationshipDirection.OUT, relatedPenguins[0].Datastore.Relations["rel_in"][0].Direction);
+            Assert.True(relatedPenguins[1].Datastore.Relations.ContainsKey("rel_in") && relatedPenguins[1].Datastore.Relations["rel_in"][0].Target.ID.Value == insertedPenguin.ID.Value);
+            Assert.Equal(PenguinRelationshipDirection.OUT, relatedPenguins[1].Datastore.Relations["rel_in"][0].Direction);
+            Assert.True(relatedPenguins[2].Datastore.Relations.ContainsKey("rel_out") && relatedPenguins[2].Datastore.Relations["rel_out"][0].Target.ID.Value == insertedPenguin.ID.Value);
+            Assert.Equal(PenguinRelationshipDirection.IN, relatedPenguins[2].Datastore.Relations["rel_out"][0].Direction);
         }
     }
 }
