@@ -89,5 +89,52 @@ namespace OnePenguin.Service.Persistence.Tests
             Assert.True(relatedPenguins[2].Datastore.Relations.ContainsKey("rel_out") && relatedPenguins[2].Datastore.Relations["rel_out"][0].Target.ID.Value == insertedPenguin.ID.Value);
             Assert.Equal(PenguinRelationshipDirection.IN, relatedPenguins[2].Datastore.Relations["rel_out"][0].Direction);
         }
+
+        [Fact]
+        public void UpdateTest1()
+        {
+            var penguin1 = new BasePenguin("UpdateTest1");
+
+            penguin1.DirtyDatastore.Attributes.Add("StringProp", "StringValue");
+            penguin1.DirtyDatastore.Attributes.Add("IntProp", 123L);
+            penguin1.DirtyDatastore.Attributes.Add("BoolProp", false);
+
+            var penguin2 = new BasePenguin("UpdateTest1");
+
+            penguin2.DirtyDatastore.Attributes.Add("StringProp", "StringValue");
+            penguin2.DirtyDatastore.Attributes.Add("IntProp", 123L);
+            penguin2.DirtyDatastore.Attributes.Add("BoolProp", false);
+
+            List<BasePenguin> insertedPenguin = null;
+
+            this.driver.RunTransaction(context =>
+            {
+                insertedPenguin = context.Insert(new List<BasePenguin> { penguin1, penguin2 });
+            });
+
+            Assert.False(insertedPenguin[0].IsDirty && insertedPenguin[1].IsDirty);
+
+            insertedPenguin[0].DirtyDatastore.Attributes.Add("StringProp", "ModifiedStringValue");
+            insertedPenguin[1].DirtyDatastore.Attributes.Add("IntProp", 456L);
+            insertedPenguin[1].DirtyDatastore.Attributes.Add("NewStringProp", "StringValue");
+
+            List<BasePenguin> updatedPenguins = null;
+            this.driver.RunTransaction(context =>
+            {
+                updatedPenguins = context.Update(insertedPenguin);
+            });
+
+            Assert.Equal("ModifiedStringValue", updatedPenguins[0].Datastore.Attributes["StringProp"]);
+            Assert.Equal(123L, updatedPenguins[0].Datastore.Attributes["IntProp"]);
+            Assert.Equal(false, updatedPenguins[0].Datastore.Attributes["BoolProp"]);
+            Assert.Equal("StringValue", updatedPenguins[1].Datastore.Attributes["StringProp"]);
+            Assert.Equal(456L, updatedPenguins[1].Datastore.Attributes["IntProp"]);
+            Assert.Equal(false, updatedPenguins[1].Datastore.Attributes["BoolProp"]);
+            Assert.Equal("StringValue", updatedPenguins[1].Datastore.Attributes["NewStringProp"]);
+
+            var getPenguins = this.driver.GetById(new List<long> { updatedPenguins[0].ID.Value, updatedPenguins[1].ID.Value });
+            Assert.Equal(getPenguins[0], updatedPenguins[0]);
+            Assert.Equal(getPenguins[1], updatedPenguins[1]);
+        }
     }
 }

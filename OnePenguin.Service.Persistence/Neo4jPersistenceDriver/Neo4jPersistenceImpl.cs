@@ -44,45 +44,71 @@ namespace OnePenguin.Service.Persistence.Neo4jPersistenceDriver
             return resultPenguins;
         }
 
-        public static List<BasePenguin> InsertPenguin(ITransaction transaction, List<BasePenguin> penguinsToInsert)
+        public static List<BasePenguin> InsertPenguin(ITransaction transaction, List<BasePenguin> penguins)
         {
-            var result = new List<BasePenguin>();
-            penguinsToInsert.ForEach(i => result.Add(null));
+            var penguinsToInsert = penguins.Clone();
+            var props = penguinsToInsert.ConvertAll(i => new { name = i.TypeName, attributes = i.DirtyDatastore.Attributes });
+            var insertResult = transaction.Run($"UNWIND $props AS properties CALL apoc.create.node([properties.name], properties.attributes) yield node RETURN id(node) as id", new { props });
+            var insertedPenguins = insertResult.Select(i => i["id"].As<long>()).ToList();
 
-            foreach (var groupedPenguins in penguinsToInsert.GroupBy(i => i.TypeName))
+            List<object> relations = new List<object>();
+            for (int n = 0; n < penguinsToInsert.Count; n++)
             {
-                var typeName = groupedPenguins.Key;
-
-                var penguins = new List<BasePenguin>();
-                var relations = new List<object>();
-
-                foreach (var penguin in groupedPenguins)
+                penguinsToInsert[n].ID = insertedPenguins[n];
+                penguinsToInsert[n].DirtyDatastore.Relations.UnionAllValues().ForEach(i =>
                 {
-                    penguins.Add(penguin);
-                }
-
-                var insertResult = transaction.Run($"UNWIND $props AS properties CREATE (obj:{typeName}) SET obj = properties RETURN obj", new { props = penguins.ConvertAll(i => i.DirtyDatastore.Attributes) });
-                var insertedPenguins = insertResult.Select(i => i["obj"].As<INode>()).ToList();
-
-                for (int n = 0; n < penguins.Count; n++)
-                {
-                    penguins[n].DirtyDatastore.Relations.UnionAllValues().ForEach(i =>
-                    {
-                        if (i.Direction == PenguinRelationshipDirection.IN)
-                            relations.Add(new { name = i.RelationName, from = i.Target.ID.Value, to = insertedPenguins[n].Id });
-                        else
-                            relations.Add(new { name = i.RelationName, from = insertedPenguins[n].Id, to = i.Target.ID.Value });
-                    });
-                }
-
-                if (relations.Count > 0)
-                    transaction.Run("UNWIND $relations as relation MATCH (a) WHERE id(a)=relation.from WITH a, relation MATCH (b) WHERE id(b)=relation.to CALL apoc.create.relationship(a, relation.name, NULL, b) YIELD rel RETURN rel", new { relations });
-
-                for (var i = 0; i < penguins.Count; i++)
-                {
-                    result[penguinsToInsert.IndexOf(penguins[i])] = new BasePenguin(insertedPenguins[i].Id, penguins[i].DirtyDatastore);
-                }
+                    relations.Add(ConvertToNeo4jRelationObj(insertedPenguins[n], i));
+                });
+                penguinsToInsert[n].Datastore = penguinsToInsert[n].DirtyDatastore;
+                penguinsToInsert[n].DirtyDatastore = new Datastore(penguinsToInsert[n].TypeName);
             }
+
+            if (relations.Count > 0)
+                transaction.Run("UNWIND $relations as relation MATCH (a),(b) WHERE id(a)=relation.from AND id(b) = relation.to CALL apoc.create.relationship(a, relation.name, relation.param, b) YIELD rel RETURN rel", new { relations });
+
+            return penguinsToInsert;
+        }
+
+        private static object ConvertToNeo4jRelationObj(long penguinId, BasePenguinRelationship relation)
+        {
+            if (relation.Direction == PenguinRelationshipDirection.OUT)
+                return new { name = relation.RelationName, from = penguinId, to = relation.Target.ID.Value, param = RelationDatastore.Combine(relation.Datastore, relation.DirtyDatastore) };
+            else
+                return new { name = relation.RelationName, from = relation.Target.ID.Value, to = penguinId, param = RelationDatastore.Combine(relation.Datastore, relation.DirtyDatastore) };
+        }
+
+        public static List<BasePenguin> UpdatePenguin(ITransaction transaction, List<BasePenguin> penguinsToUpdate)
+        {
+            var newRelations = new Dictionary<string, List<object>>();
+            var removeRelations = new Dictionary<string, List<object>>();
+
+            if (penguinsToUpdate.Any(i => !i.ID.HasValue)) throw new InvalidOperationException("Penguin to update must have an ID.");
+
+            foreach (var penguin in penguinsToUpdate)
+            {
+                penguin.DirtyDatastore.Relations.UnionAllValues().Except(penguin.Datastore.Relations.UnionAllValues()).ForEach(i =>
+                {
+                    newRelations.CreateOrAddToList(i.RelationName, ConvertToNeo4jRelationObj(penguin.ID.Value, i));
+                });
+                penguin.DirtyDatastore.Relations.ForEach(kvp => kvp.Value.Except(penguin.Datastore.Relations[kvp.Key]).ForEach(i =>
+                {
+                    removeRelations.CreateOrAddToList(i.RelationName, ConvertToNeo4jRelationObj(penguin.ID.Value, i));
+                }));
+            }
+
+            foreach (var kvp in removeRelations)
+            {
+                transaction.Run($"UNWIND $relations as relation MATCH (a)-[r:{kvp.Key}]->(b) WHERE id(a) = relation.from AND id(b) = relation.to DELETE r", new { removeRelations });
+            }
+
+            foreach (var kvp in newRelations)
+            {
+                transaction.Run("UNWIND $relations as relation MATCH (a),(b) WHERE id(a)=relation.from AND id(b) = relation.to CALL apoc.create.relationship(a, relation.name, relation.param, b) YIELD rel RETURN rel", new { newRelations });
+            }
+
+            var result = penguinsToUpdate.ConvertAll(i => new BasePenguin(i.ID.Value, Datastore.Combine(i.Datastore, i.DirtyDatastore)));
+            var props = result.Select(i => new { id = i.ID.Value, attributes = i.Datastore.Attributes });
+            transaction.Run("UNWIND $props as prop MATCH (obj) WHERE id(obj) = prop.id SET obj = prop.attributes RETURN obj", new { props });
 
             return result;
         }

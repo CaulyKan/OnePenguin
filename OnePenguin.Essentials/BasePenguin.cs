@@ -1,10 +1,11 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using OnePenguin.Essentials.Utilities;
 
 namespace OnePenguin.Essentials
 {
-    public class BasePenguin : PenguinReference
+    public class BasePenguin : PenguinReference, IEquatable<BasePenguin>, ICloneable
     {
         public string TypeName
         {
@@ -43,22 +44,40 @@ namespace OnePenguin.Essentials
             }
         }
 
-        public void AddRelation(PenguinRelationshipDirection direction, string relationName, long id)
+        public bool Equals(BasePenguin other)
         {
-            this.AddRelation(direction, relationName, new List<long> { id });
+            if (other == null) return false;
+
+            return this.TypeName == other.TypeName &&
+                this.Datastore.Equals(other.Datastore) &&
+                this.DirtyDatastore.Equals(other.DirtyDatastore);
         }
 
-        public void AddRelation(PenguinRelationshipDirection direction, string relationName, List<long> id)
+        public override int GetHashCode()
         {
-            id.ForEach(i =>
+            unchecked
             {
-                var basePenguinRelationship = new BasePenguinRelationship(direction, new RelationDatastore(relationName), i);
-                this.DirtyDatastore.Relations.CreateOrAddToList(relationName, basePenguinRelationship);
-            });
+                var result = 1;
+                result = (result * 13) ^ this.TypeName.GetHashCode();
+                if (this.Datastore != null) result = (result * 13) ^ this.Datastore.GetHashCode();
+                if (this.DirtyDatastore != null) result = (result * 13) ^ this.DirtyDatastore.GetHashCode();
+
+                return result;
+            }
+        }
+
+        public object Clone()
+        {
+            var result = Activator.CreateInstance(this.GetType(), new object[] { this.TypeName }) as BasePenguin;
+
+            result.Datastore = this.Datastore.Clone() as Datastore;
+            result.DirtyDatastore = this.DirtyDatastore.Clone() as Datastore;
+
+            return result;
         }
     }
 
-    public class BasePenguinRelationship
+    public class BasePenguinRelationship : IEquatable<BasePenguinRelationship>, ICloneable
     {
         public BasePenguinRelationship(string relationName)
         {
@@ -100,6 +119,44 @@ namespace OnePenguin.Essentials
                 return DirtyDatastore.Attributes.Count > 0;
             }
         }
+
+        public object Clone()
+        {
+            var result = Activator.CreateInstance(this.GetType(), new object[] { RelationName }) as BasePenguinRelationship;
+
+            result.Direction = this.Direction;
+            result.Target = this.Target;
+            result.Datastore = this.Datastore.Clone() as RelationDatastore;
+            result.DirtyDatastore = this.DirtyDatastore.Clone() as RelationDatastore;
+
+            return result;
+        }
+
+        public bool Equals(BasePenguinRelationship other)
+        {
+            if (other == null) return false;
+
+            return this.RelationName == other.RelationName &&
+                this.Datastore.Equals(other.Datastore) &&
+                this.Direction.Equals(other.Direction) &&
+                this.DirtyDatastore.Equals(other.DirtyDatastore) &&
+                this.Target.Equals(other.Target);
+        }
+
+        public override int GetHashCode()
+        {
+            unchecked
+            {
+                var result = 1;
+                result = (result * 13) ^ this.RelationName.GetHashCode();
+                result = (result * 13) ^ this.Direction.GetHashCode();
+                if (this.Target != null) result = (result * 13) ^ this.Target.GetHashCode();
+                if (this.Datastore != null) result = (result * 13) ^ this.Datastore.GetHashCode();
+                if (this.DirtyDatastore != null) result = (result * 13) ^ this.DirtyDatastore.GetHashCode();
+
+                return result;
+            }
+        }
     }
 
     public enum PenguinRelationshipDirection
@@ -125,7 +182,7 @@ namespace OnePenguin.Essentials
         long? ID { get; set; }
     }
 
-    public class Datastore
+    public class Datastore : ICloneable, IEquatable<Datastore>
     {
         public Datastore(string typeName)
         {
@@ -137,11 +194,35 @@ namespace OnePenguin.Essentials
         public Dictionary<string, object> Attributes = new Dictionary<string, object>();
 
         public Dictionary<string, List<BasePenguinRelationship>> Relations = new Dictionary<string, List<BasePenguinRelationship>>();
+
+        public object Clone()
+        {
+            return new Datastore(TypeName) { Attributes = this.Attributes.Clone(), Relations = this.Relations.Clone() };
+        }
+
+        public static Datastore Combine(Datastore a, Datastore b)
+        {
+            var result = a.Clone() as Datastore;
+
+            foreach (var kvp in b.Attributes) result.Attributes.CreateOrSet(kvp.Key, kvp.Value);
+
+            foreach (var kvp in b.Relations) result.Relations.CreateOrSet(kvp.Key, kvp.Value);
+
+            return result;
+        }
+
+        public bool Equals(Datastore other)
+        {
+            if (other == null) return false;
+
+            return this.TypeName == other.TypeName &&
+                this.Attributes.EqualsTo(other.Attributes) &&
+                this.Relations.EqualsTo(other.Relations);
+        }
     }
 
-    public class RelationDatastore
+    public class RelationDatastore : ICloneable, IEquatable<RelationDatastore>
     {
-
         public RelationDatastore(string relationName)
         {
             this.RelationName = relationName;
@@ -150,5 +231,27 @@ namespace OnePenguin.Essentials
         public string RelationName { get; set; }
 
         public Dictionary<string, object> Attributes = new Dictionary<string, object>();
+
+        public object Clone()
+        {
+            return new RelationDatastore(RelationName) { Attributes = this.Attributes.Clone() };
+        }
+
+        public static RelationDatastore Combine(RelationDatastore a, RelationDatastore b)
+        {
+            var result = a.Clone() as RelationDatastore;
+
+            foreach (var kvp in b.Attributes) result.Attributes.CreateOrSet(kvp.Key, kvp.Value);
+
+            return result;
+        }
+
+        public bool Equals(RelationDatastore other)
+        {
+            if (other == null) return false;
+
+            return this.RelationName == other.RelationName &&
+            this.Attributes.EqualsTo(other.Attributes);
+        }
     }
 }

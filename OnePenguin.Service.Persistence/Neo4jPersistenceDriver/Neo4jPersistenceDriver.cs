@@ -174,22 +174,29 @@ namespace OnePenguin.Service.Persistence.Neo4jPersistenceDriver
 
         public BasePenguin Update(BasePenguin penguin)
         {
-            throw new System.NotImplementedException();
+            return this.Update(new List<BasePenguin> { penguin })[0];
         }
 
-        public List<BasePenguin> Update(List<BasePenguin> penguins)
+        public List<BasePenguin> Update(List<BasePenguin> penguin)
         {
-            throw new System.NotImplementedException();
+            try
+            {
+                return Neo4jPersistenceImpl.UpdatePenguin(this.transaction, penguin);
+            }
+            catch (Exception e)
+            {
+                throw new PersistenceException($"{nameof(Neo4jPersistenceDriver)}: UpdatePenguin() failed: {e.Message}", e);
+            }
         }
 
         public TPenguin Update<TPenguin>(TPenguin penguin) where TPenguin : BasePenguin
         {
-            throw new System.NotImplementedException();
+            return this.Update(penguin) as TPenguin;
         }
 
-        public List<TPenguin> Update<TPenguin>(List<TPenguin> penguins) where TPenguin : BasePenguin
+        public List<TPenguin> Update<TPenguin>(List<TPenguin> penguin) where TPenguin : BasePenguin
         {
-            throw new System.NotImplementedException();
+            return this.Update(penguin).ConvertAll(i => i.As<TPenguin>());
         }
     }
 
