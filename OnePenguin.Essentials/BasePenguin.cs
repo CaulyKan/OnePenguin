@@ -44,6 +44,11 @@ namespace OnePenguin.Essentials
             }
         }
 
+        public override bool Equals(object obj)
+        {
+            return this.Equals(obj as BasePenguin);
+        }
+
         public bool Equals(BasePenguin other)
         {
             if (other == null) return false;
@@ -83,6 +88,12 @@ namespace OnePenguin.Essentials
         {
             this.Datastore = new RelationDatastore(relationName);
             this.DirtyDatastore = new RelationDatastore(relationName);
+        }
+
+        public BasePenguinRelationship(string relationName, PenguinRelationshipDirection direction, long target) : this(relationName)
+        {
+            this.Direction = direction;
+            this.Target = new PenguinReference(target);
         }
 
         public BasePenguinRelationship(PenguinRelationshipDirection direction, RelationDatastore datastore) : this(datastore.RelationName)
@@ -132,6 +143,11 @@ namespace OnePenguin.Essentials
             return result;
         }
 
+        public override bool Equals(object obj)
+        {
+            return this.Equals(obj as BasePenguinRelationship);
+        }
+
         public bool Equals(BasePenguinRelationship other)
         {
             if (other == null) return false;
@@ -165,7 +181,7 @@ namespace OnePenguin.Essentials
         OUT
     }
 
-    public class PenguinReference : IPenguinReference
+    public class PenguinReference : IPenguinReference, IEquatable<PenguinReference>
     {
         public PenguinReference() { }
 
@@ -175,6 +191,26 @@ namespace OnePenguin.Essentials
         }
 
         public long? ID { get; set; } = null;
+
+        public bool Equals(PenguinReference other)
+        {
+            return this.ID == other.ID;
+        }
+
+        public override bool Equals(object obj)
+        {
+            return this.Equals(obj as PenguinReference);
+        }
+
+        public override int GetHashCode()
+        {
+            unchecked
+            {
+                var result = 1;
+                result = (result * 13) ^ this.ID.GetHashCode();
+                return result;
+            }
+        }
     }
 
     public interface IPenguinReference
@@ -193,7 +229,7 @@ namespace OnePenguin.Essentials
 
         public Dictionary<string, object> Attributes = new Dictionary<string, object>();
 
-        public Dictionary<string, List<BasePenguinRelationship>> Relations = new Dictionary<string, List<BasePenguinRelationship>>();
+        public Dictionary<string, HashSet<BasePenguinRelationship>> Relations = new Dictionary<string, HashSet<BasePenguinRelationship>>();
 
         public object Clone()
         {
@@ -211,6 +247,11 @@ namespace OnePenguin.Essentials
             return result;
         }
 
+        public override bool Equals(object obj)
+        {
+            return this.Equals(obj as Datastore);
+        }
+
         public bool Equals(Datastore other)
         {
             if (other == null) return false;
@@ -218,6 +259,18 @@ namespace OnePenguin.Essentials
             return this.TypeName == other.TypeName &&
                 this.Attributes.EqualsTo(other.Attributes) &&
                 this.Relations.EqualsTo(other.Relations);
+        }
+
+        public override int GetHashCode()
+        {
+            unchecked
+            {
+                var result = 1;
+                result = (result * 13) ^ this.TypeName.GetHashCode();
+                if (this.Attributes != null) result = (result * 13) ^ this.Attributes.GetHashCode();
+                if (this.Relations != null) result = (result * 13) ^ this.Relations.GetHashCode();
+                return result;
+            }
         }
     }
 
@@ -246,12 +299,28 @@ namespace OnePenguin.Essentials
             return result;
         }
 
+        public override bool Equals(object obj)
+        {
+            return this.Equals(obj as RelationDatastore);
+        }
+
         public bool Equals(RelationDatastore other)
         {
             if (other == null) return false;
 
             return this.RelationName == other.RelationName &&
             this.Attributes.EqualsTo(other.Attributes);
+        }
+
+        public override int GetHashCode()
+        {
+            unchecked
+            {
+                var result = 1;
+                result = (result * 13) ^ this.RelationName.GetHashCode();
+                if (this.Attributes != null) result = (result * 13) ^ this.Attributes.GetHashCode();
+                return result;
+            }
         }
     }
 }

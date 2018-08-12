@@ -44,6 +44,19 @@ namespace OnePenguin.Essentials.Utilities
             return list.CloneList() as List<T>;
         }
 
+        public static object CloneSet(IEnumerable hset)
+        {
+            var result = Activator.CreateInstance(hset.GetType()) as IEnumerable;
+            var add = result.GetType().GetMethod("Add");
+            foreach (var i in hset)
+            {
+                var obj = GetCloneableObject(i);
+                add.Invoke(result, new object[] { obj });
+            }
+
+            return result;
+        }
+
         private static object GetCloneableObject(object o)
         {
             if (simpleTypes.Contains(o.GetType()))
@@ -66,10 +79,30 @@ namespace OnePenguin.Essentials.Utilities
             {
                 return (o as IList).CloneList();
             }
+            else if (o.GetType().GetGenericTypeDefinition() == typeof(HashSet<>))
+            {
+                return CloneSet(o as IEnumerable);
+            }
             else
             {
                 throw new InvalidOperationException("Can't clone " + o.GetType());
             }
+        }
+
+        public static bool SequenceEqual(this IEnumerable a, IEnumerable b)
+        {
+            var ea = a.GetEnumerator();
+            var eb = b.GetEnumerator();
+            while (ea.MoveNext())
+            {
+                if (!eb.MoveNext()) return false;
+
+                if (!ea.Current.Equals(eb.Current)) return false;
+            }
+
+            if (eb.MoveNext()) return false;
+
+            return true;
         }
 
         public static void CreateOrSet<TKey, TValue>(this IDictionary<TKey, TValue> dic, TKey key, TValue obj)
@@ -88,12 +121,28 @@ namespace OnePenguin.Essentials.Utilities
                 dic.Add(key, new List<TValue> { obj });
         }
 
+        public static void CreateOrAddToList<TKey, TValue>(this IDictionary<TKey, HashSet<TValue>> dic, TKey key, TValue obj)
+        {
+            if (dic.ContainsKey(key))
+                dic[key].Add(obj);
+            else
+                dic.Add(key, new HashSet<TValue> { obj });
+        }
+
         public static void CreateOrAddRangeToList<TKey, TValue>(this IDictionary<TKey, List<TValue>> dic, TKey key, List<TValue> obj)
         {
             if (dic.ContainsKey(key))
                 dic[key].AddRange(obj);
             else
                 dic.Add(key, new List<TValue>(obj));
+        }
+
+        public static void CreateOrAddRangeToList<TKey, TValue>(this IDictionary<TKey, HashSet<TValue>> dic, TKey key, HashSet<TValue> obj)
+        {
+            if (dic.ContainsKey(key))
+                dic[key].AddRange(obj);
+            else
+                dic.Add(key, new HashSet<TValue>(obj));
         }
 
         public static void ForEach<TKey, TValue>(this IDictionary<TKey, TValue> dic, Action<KeyValuePair<TKey, TValue>> action)
@@ -115,6 +164,18 @@ namespace OnePenguin.Essentials.Utilities
             return result;
         }
 
+        public static HashSet<TValue> UnionAllValues<TKey, TValue>(this IDictionary<TKey, HashSet<TValue>> dic)
+        {
+            var result = new HashSet<TValue>();
+            foreach (var v in dic.Values) result.AddRange(v);
+            return result;
+        }
+
+        public static void AddRange<T>(this HashSet<T> hset, IEnumerable<T> v)
+        {
+            foreach (var i in v) hset.Add(i);
+        }
+
         public static void ForEach<T>(this IEnumerable<T> list, Action<T> action)
         {
             foreach (var i in list) action(i);
@@ -130,9 +191,22 @@ namespace OnePenguin.Essentials.Utilities
             {
                 TValue value2;
                 if (!dict2.TryGetValue(kvp.Key, out value2)) return false;
-                if (!kvp.Value.Equals(value2)) return false;
+
+                if (value2.GetType().GetGenericTypeDefinition() == typeof(HashSet<>))
+                {
+                    if (!kvp.Value.Equals(value2)) return false;
+                }
+                if (value2 is IEnumerable)
+                {
+                    if (!(value2 as IEnumerable).SequenceEqual(kvp.Value as IEnumerable)) return false;
+                }
+                else if (!kvp.Value.Equals(value2))
+                {
+                    return false;
+                }
             }
             return true;
         }
     }
+
 }

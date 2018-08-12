@@ -72,9 +72,9 @@ namespace OnePenguin.Service.Persistence.Neo4jPersistenceDriver
         private static object ConvertToNeo4jRelationObj(long penguinId, BasePenguinRelationship relation)
         {
             if (relation.Direction == PenguinRelationshipDirection.OUT)
-                return new { name = relation.RelationName, from = penguinId, to = relation.Target.ID.Value, param = RelationDatastore.Combine(relation.Datastore, relation.DirtyDatastore) };
+                return new { name = relation.RelationName, from = penguinId, to = relation.Target.ID.Value, param = RelationDatastore.Combine(relation.Datastore, relation.DirtyDatastore).Attributes };
             else
-                return new { name = relation.RelationName, from = relation.Target.ID.Value, to = penguinId, param = RelationDatastore.Combine(relation.Datastore, relation.DirtyDatastore) };
+                return new { name = relation.RelationName, from = relation.Target.ID.Value, to = penguinId, param = RelationDatastore.Combine(relation.Datastore, relation.DirtyDatastore).Attributes };
         }
 
         public static List<BasePenguin> UpdatePenguin(ITransaction transaction, List<BasePenguin> penguinsToUpdate)
@@ -90,21 +90,18 @@ namespace OnePenguin.Service.Persistence.Neo4jPersistenceDriver
                 {
                     newRelations.CreateOrAddToList(i.RelationName, ConvertToNeo4jRelationObj(penguin.ID.Value, i));
                 });
-                penguin.DirtyDatastore.Relations.ForEach(kvp => kvp.Value.Except(penguin.Datastore.Relations[kvp.Key]).ForEach(i =>
+                penguin.Datastore.Relations.UnionAllValues().Except(penguin.DirtyDatastore.Relations.UnionAllValues()).ForEach(i =>
                 {
                     removeRelations.CreateOrAddToList(i.RelationName, ConvertToNeo4jRelationObj(penguin.ID.Value, i));
-                }));
+                });
             }
 
             foreach (var kvp in removeRelations)
             {
-                transaction.Run($"UNWIND $relations as relation MATCH (a)-[r:{kvp.Key}]->(b) WHERE id(a) = relation.from AND id(b) = relation.to DELETE r", new { removeRelations });
+                transaction.Run($"UNWIND $relations as relation MATCH (a)-[r:{kvp.Key}]->(b) WHERE id(a) = relation.from AND id(b) = relation.to DELETE r", new { relations = kvp.Value });
             }
 
-            foreach (var kvp in newRelations)
-            {
-                transaction.Run("UNWIND $relations as relation MATCH (a),(b) WHERE id(a)=relation.from AND id(b) = relation.to CALL apoc.create.relationship(a, relation.name, relation.param, b) YIELD rel RETURN rel", new { newRelations });
-            }
+            transaction.Run("UNWIND $relations as relation MATCH (a),(b) WHERE id(a)=relation.from AND id(b) = relation.to CALL apoc.create.relationship(a, relation.name, relation.param, b) YIELD rel RETURN rel", new { relations = newRelations.UnionAllValues() });
 
             var result = penguinsToUpdate.ConvertAll(i => new BasePenguin(i.ID.Value, Datastore.Combine(i.Datastore, i.DirtyDatastore)));
             var props = result.Select(i => new { id = i.ID.Value, attributes = i.Datastore.Attributes });
