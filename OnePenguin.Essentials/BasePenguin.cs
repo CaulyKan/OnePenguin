@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using OnePenguin.Essentials.Utilities;
 
 namespace OnePenguin.Essentials
@@ -229,7 +230,7 @@ namespace OnePenguin.Essentials
 
         public Dictionary<string, object> Attributes = new Dictionary<string, object>();
 
-        public Dictionary<string, HashSet<BasePenguinRelationship>> Relations = new Dictionary<string, HashSet<BasePenguinRelationship>>();
+        public Dictionary<string, ComparableHashSet<BasePenguinRelationship>> Relations = new Dictionary<string, ComparableHashSet<BasePenguinRelationship>>();
 
         public object Clone()
         {
@@ -267,8 +268,12 @@ namespace OnePenguin.Essentials
             {
                 var result = 1;
                 result = (result * 13) ^ this.TypeName.GetHashCode();
-                if (this.Attributes != null) result = (result * 13) ^ this.Attributes.GetHashCode();
-                if (this.Relations != null) result = (result * 13) ^ this.Relations.GetHashCode();
+                if (this.Attributes != null)
+                    foreach (var kvp in this.Attributes.OrderBy(i => i.Key.GetHashCode()))
+                        result = (result * 13) ^ kvp.GetHashCode();
+                if (this.Relations != null)
+                    foreach (var kvp in this.Relations.OrderBy(i => i.GetHashCode()))
+                        result = (result * 13) ^ kvp.GetHashCode();
                 return result;
             }
         }
@@ -318,7 +323,9 @@ namespace OnePenguin.Essentials
             {
                 var result = 1;
                 result = (result * 13) ^ this.RelationName.GetHashCode();
-                if (this.Attributes != null) result = (result * 13) ^ this.Attributes.GetHashCode();
+                if (this.Attributes != null)
+                    foreach (var kvp in this.Attributes.OrderBy(i => i.GetHashCode()))
+                        result = (result * 13) ^ kvp.GetHashCode();
                 return result;
             }
         }

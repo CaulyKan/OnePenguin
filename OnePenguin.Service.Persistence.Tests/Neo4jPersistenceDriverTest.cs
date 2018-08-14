@@ -133,7 +133,7 @@ namespace OnePenguin.Service.Persistence.Tests
             Assert.Equal("StringValue", updatedPenguins[1].Datastore.Attributes["NewStringProp"]);
 
             var getPenguins = this.driver.GetById(new List<long> { updatedPenguins[0].ID.Value, updatedPenguins[1].ID.Value });
-            Assert.Equal(new HashSet<BasePenguin>(getPenguins), new HashSet<BasePenguin>(updatedPenguins));
+            Assert.Equal(new ComparableHashSet<BasePenguin>(getPenguins), new ComparableHashSet<BasePenguin>(updatedPenguins));
         }
 
         [Fact]
@@ -170,11 +170,12 @@ namespace OnePenguin.Service.Persistence.Tests
             });
 
             Assert.Equal(1, updatedPenguin.Datastore.Relations["rel_in"].Count);
-            Assert.Equal(insertedPenguin.Datastore.Relations["rel_in"].First(), updatedPenguin.Datastore.Relations["rel_in"].First());
+            Assert.Equal(insertedPenguin.DirtyDatastore.Relations["rel_in"].First(), updatedPenguin.Datastore.Relations["rel_in"].First());
             Assert.Equal(2, updatedPenguin.Datastore.Relations["rel_out"].Count);
-            Assert.Equal(insertedPenguin.Datastore.Relations["rel_out"].Select(i => i.Target.ID.Value).OrderBy(i => i).ToList(), new List<long> { relatedPenguins[2].ID.Value, relatedPenguins[3].ID.Value });
+            Assert.Equal(insertedPenguin.DirtyDatastore.Relations["rel_out"].Select(i => i.Target.ID.Value).OrderBy(i => i).ToList(), new List<long> { relatedPenguins[2].ID.Value, relatedPenguins[3].ID.Value });
 
             var getPenguin = this.driver.GetById(updatedPenguin.ID.Value);
+            Assert.Equal(updatedPenguin.Datastore, getPenguin.Datastore);
             Assert.Equal(updatedPenguin, getPenguin);
         }
     }

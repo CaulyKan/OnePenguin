@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Collections.Generic;
 using System.Collections;
+using System.Runtime.Serialization;
 
 namespace OnePenguin.Essentials.Utilities
 {
@@ -79,7 +80,7 @@ namespace OnePenguin.Essentials.Utilities
             {
                 return (o as IList).CloneList();
             }
-            else if (o.GetType().GetGenericTypeDefinition() == typeof(HashSet<>))
+            else if (IsSubclassOfRawGeneric(o.GetType(), typeof(HashSet<>)))
             {
                 return CloneSet(o as IEnumerable);
             }
@@ -121,12 +122,12 @@ namespace OnePenguin.Essentials.Utilities
                 dic.Add(key, new List<TValue> { obj });
         }
 
-        public static void CreateOrAddToList<TKey, TValue>(this IDictionary<TKey, HashSet<TValue>> dic, TKey key, TValue obj)
+        public static void CreateOrAddToList<TKey, TValue>(this IDictionary<TKey, ComparableHashSet<TValue>> dic, TKey key, TValue obj)
         {
             if (dic.ContainsKey(key))
                 dic[key].Add(obj);
             else
-                dic.Add(key, new HashSet<TValue> { obj });
+                dic.Add(key, new ComparableHashSet<TValue> { obj });
         }
 
         public static void CreateOrAddRangeToList<TKey, TValue>(this IDictionary<TKey, List<TValue>> dic, TKey key, List<TValue> obj)
@@ -137,12 +138,12 @@ namespace OnePenguin.Essentials.Utilities
                 dic.Add(key, new List<TValue>(obj));
         }
 
-        public static void CreateOrAddRangeToList<TKey, TValue>(this IDictionary<TKey, HashSet<TValue>> dic, TKey key, HashSet<TValue> obj)
+        public static void CreateOrAddRangeToList<TKey, TValue>(this IDictionary<TKey, ComparableHashSet<TValue>> dic, TKey key, HashSet<TValue> obj)
         {
             if (dic.ContainsKey(key))
                 dic[key].AddRange(obj);
             else
-                dic.Add(key, new HashSet<TValue>(obj));
+                dic.Add(key, new ComparableHashSet<TValue>(obj));
         }
 
         public static void ForEach<TKey, TValue>(this IDictionary<TKey, TValue> dic, Action<KeyValuePair<TKey, TValue>> action)
@@ -164,9 +165,9 @@ namespace OnePenguin.Essentials.Utilities
             return result;
         }
 
-        public static HashSet<TValue> UnionAllValues<TKey, TValue>(this IDictionary<TKey, HashSet<TValue>> dic)
+        public static HashSet<TValue> UnionAllValues<TKey, TValue>(this IDictionary<TKey, ComparableHashSet<TValue>> dic)
         {
-            var result = new HashSet<TValue>();
+            var result = new ComparableHashSet<TValue>();
             foreach (var v in dic.Values) result.AddRange(v);
             return result;
         }
@@ -192,11 +193,11 @@ namespace OnePenguin.Essentials.Utilities
                 TValue value2;
                 if (!dict2.TryGetValue(kvp.Key, out value2)) return false;
 
-                if (value2.GetType().GetGenericTypeDefinition() == typeof(HashSet<>))
+                if (IsSubclassOfRawGeneric(value2.GetType(), typeof(HashSet<>)))
                 {
                     if (!kvp.Value.Equals(value2)) return false;
                 }
-                if (value2 is IEnumerable)
+                else if (value2 is IEnumerable)
                 {
                     if (!(value2 as IEnumerable).SequenceEqual(kvp.Value as IEnumerable)) return false;
                 }
@@ -207,6 +208,67 @@ namespace OnePenguin.Essentials.Utilities
             }
             return true;
         }
+
+        static bool IsSubclassOfRawGeneric(Type toCheck, Type generic)
+        {
+            while (toCheck != null && toCheck != typeof(object))
+            {
+                var cur = toCheck.IsGenericType ? toCheck.GetGenericTypeDefinition() : toCheck;
+                if (generic == cur)
+                {
+                    return true;
+                }
+                toCheck = toCheck.BaseType;
+            }
+            return false;
+        }
     }
 
+
+    public class ComparableHashSet<T> : HashSet<T>
+    {
+        public ComparableHashSet()
+        {
+        }
+
+        public ComparableHashSet(IEnumerable<T> collection) : base(collection)
+        {
+        }
+
+        public ComparableHashSet(IEnumerable<T> collection, IEqualityComparer<T> comparer) : base(collection, comparer)
+        {
+        }
+
+        public ComparableHashSet(IEqualityComparer<T> comparer) : base(comparer)
+        {
+        }
+
+        protected ComparableHashSet(SerializationInfo info, StreamingContext context) : base(info, context)
+        {
+        }
+
+        public override int GetHashCode()
+        {
+            unchecked
+            {
+                var result = 1;
+                foreach (var i in this.OrderBy(i => i.GetHashCode()))
+                {
+                    result = (result * 13) ^ i.GetHashCode();
+                }
+
+                return result;
+            }
+        }
+
+        public override bool Equals(object obj)
+        {
+            if (!(obj is HashSet<T>)) return false;
+
+            var other = obj as HashSet<T>;
+            var a = this.OrderBy(i => i.GetHashCode());
+            var b = other.OrderBy(i => i.GetHashCode());
+            return a.SequenceEqual(b);
+        }
+    }
 }
