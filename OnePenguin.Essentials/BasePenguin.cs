@@ -6,7 +6,7 @@ using OnePenguin.Essentials.Utilities;
 
 namespace OnePenguin.Essentials
 {
-    public class BasePenguin : PenguinReference, IEquatable<BasePenguin>, ICloneable
+    public partial class BasePenguin : PenguinReference, IEquatable<BasePenguin>, ICloneable
     {
         public string TypeName
         {
@@ -180,6 +180,18 @@ namespace OnePenguin.Essentials
     {
         IN,
         OUT
+    }
+
+    public class PenguinReference<TPenguin> : PenguinReference
+    {
+        public PenguinReference() { }
+
+        public PenguinReference(long id) : base(id) { }
+
+        public Type GetPenguinType()
+        {
+            return typeof(TPenguin);
+        }
     }
 
     public class PenguinReference : IPenguinReference, IEquatable<PenguinReference>
