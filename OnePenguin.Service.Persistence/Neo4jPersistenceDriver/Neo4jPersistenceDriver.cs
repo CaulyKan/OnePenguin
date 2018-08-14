@@ -17,12 +17,9 @@ namespace OnePenguin.Service.Persistence.Neo4jPersistenceDriver
 
         public Neo4jPersistenceDriver(string uri, string user, string passwd)
         {
-            var loggerFactory = new Microsoft.Extensions.Logging.LoggerFactory();
-            loggerFactory.AddProvider(new DebugLoggerProvider((text, logLevel) => logLevel >= Microsoft.Extensions.Logging.LogLevel.Debug));
-            logger = loggerFactory.CreateLogger(nameof(Neo4jPersistenceDriver));
+            logger = new LoggerFactory().AddDebug().CreateLogger(nameof(Neo4jPersistenceDriver));
 
-            driver = GraphDatabase.Driver(uri, AuthTokens.Basic(user, passwd),
-                                          new Config { Logger = new Neo4jPersistenceDriverLogger(Neo4j.Driver.V1.LogLevel.Debug, logger) });
+            driver = GraphDatabase.Driver(uri, AuthTokens.Basic(user, passwd));
         }
 
         public BasePenguin GetById(long id)
@@ -122,22 +119,29 @@ namespace OnePenguin.Service.Persistence.Neo4jPersistenceDriver
 
         public void Delete(BasePenguin penguin)
         {
-            throw new System.NotImplementedException();
+            this.Delete(new List<BasePenguin> { penguin });
         }
 
         public void Delete(List<BasePenguin> penguins)
         {
-            throw new System.NotImplementedException();
+            try
+            {
+                Neo4jPersistenceImpl.DeletePenguin(this.transaction, penguins);
+            }
+            catch (Exception e)
+            {
+                throw new PersistenceException($"{nameof(Neo4jPersistenceDriver)}: DeletePenguin() failed: {e.Message}", e);
+            }
         }
 
         public void Delete<TPenguin>(TPenguin penguin) where TPenguin : BasePenguin
         {
-            throw new System.NotImplementedException();
+            this.Delete(penguin as BasePenguin);
         }
 
         public void Delete<TPenguin>(List<TPenguin> penguins) where TPenguin : BasePenguin
         {
-            throw new System.NotImplementedException();
+            this.Delete(penguins.ConvertAll(i => i as BasePenguin));
         }
 
         public void Dispose()
@@ -164,12 +168,12 @@ namespace OnePenguin.Service.Persistence.Neo4jPersistenceDriver
 
         public TPenguin Insert<TPenguin>(TPenguin penguin) where TPenguin : BasePenguin
         {
-            return this.Insert(penguin) as TPenguin;
+            return this.Insert(penguin as BasePenguin) as TPenguin;
         }
 
         public List<TPenguin> Insert<TPenguin>(List<TPenguin> penguin) where TPenguin : BasePenguin
         {
-            return this.Insert(penguin).ConvertAll(i => i.As<TPenguin>());
+            return this.Insert(penguin.ConvertAll(i => i as BasePenguin)).ConvertAll(i => i.As<TPenguin>());
         }
 
         public BasePenguin Update(BasePenguin penguin)
@@ -191,52 +195,12 @@ namespace OnePenguin.Service.Persistence.Neo4jPersistenceDriver
 
         public TPenguin Update<TPenguin>(TPenguin penguin) where TPenguin : BasePenguin
         {
-            return this.Update(penguin) as TPenguin;
+            return this.Update(penguin as BasePenguin) as TPenguin;
         }
 
         public List<TPenguin> Update<TPenguin>(List<TPenguin> penguin) where TPenguin : BasePenguin
         {
-            return this.Update(penguin).ConvertAll(i => i.As<TPenguin>());
-        }
-    }
-
-    public class Neo4jPersistenceDriverLogger : Neo4j.Driver.V1.ILogger
-    {
-        public Neo4jPersistenceDriverLogger(Neo4j.Driver.V1.LogLevel level, Microsoft.Extensions.Logging.ILogger logger)
-        {
-            this.Level = level;
-            this.logger = logger;
-        }
-
-        public Neo4j.Driver.V1.LogLevel Level { get; set; }
-
-        private readonly Microsoft.Extensions.Logging.ILogger logger;
-
-        public string BuildMessage(string message, object[] restOfMessage)
-        {
-            var result = message;
-            foreach (var s in restOfMessage) message += "," + s.ToString();
-            return result;
-        }
-
-        public void Debug(string message, params object[] restOfMessage)
-        {
-            logger.LogDebug(BuildMessage(message, restOfMessage), restOfMessage);
-        }
-
-        public void Error(string message, Exception cause = null, params object[] restOfMessage)
-        {
-            logger.LogError(BuildMessage(message, restOfMessage), cause, restOfMessage);
-        }
-
-        public void Info(string message, params object[] restOfMessage)
-        {
-            logger.LogInformation(BuildMessage(message, restOfMessage), restOfMessage);
-        }
-
-        public void Trace(string message, params object[] restOfMessage)
-        {
-            logger.LogTrace(BuildMessage(message, restOfMessage), restOfMessage);
+            return this.Update(penguin.ConvertAll(i => i as BasePenguin)).ConvertAll(i => i.As<TPenguin>());
         }
     }
 }

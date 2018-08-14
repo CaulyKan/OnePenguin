@@ -109,5 +109,13 @@ namespace OnePenguin.Service.Persistence.Neo4jPersistenceDriver
 
             return result;
         }
+
+        public static void DeletePenguin(ITransaction transaction, List<BasePenguin> penguinsToDelete)
+        {
+            if (penguinsToDelete.Any(i => !i.ID.HasValue)) throw new InvalidOperationException("Penguin to delete must have an ID.");
+            var ids = penguinsToDelete.Select(i => i.ID.Value);
+
+            transaction.Run("MATCH (a) WHERE id(a) IN $ids DETACH DELETE a", new { ids });
+        }
     }
 }

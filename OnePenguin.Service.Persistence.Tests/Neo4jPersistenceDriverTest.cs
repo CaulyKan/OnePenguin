@@ -178,5 +178,24 @@ namespace OnePenguin.Service.Persistence.Tests
             Assert.Equal(updatedPenguin.Datastore, getPenguin.Datastore);
             Assert.Equal(updatedPenguin, getPenguin);
         }
+
+        [Fact]
+        public void DeleteTest()
+        {
+            var penguin1 = new BasePenguin("DeleteTest1");
+            this.driver.RunTransaction(context => penguin1 = context.Insert(penguin1));
+
+            var penguin2 = new BasePenguin("DeleteTest1");
+            penguin2.AddRelation(PenguinRelationshipDirection.OUT, "test", penguin1.ID.Value);
+            this.driver.RunTransaction(context => penguin2 = context.Insert(penguin2));
+
+            Assert.Equal(1, penguin2.Datastore.Relations["test"].Count);
+
+            this.driver.RunTransaction(context => context.Delete(penguin1));
+
+            Assert.Throws(typeof(PersistenceException), () => this.driver.GetById(penguin1.ID.Value));
+            var newPenguin2 = this.driver.GetById(penguin2.ID.Value);
+            Assert.Equal(0, newPenguin2.Datastore.Relations.Count);
+        }
     }
 }
