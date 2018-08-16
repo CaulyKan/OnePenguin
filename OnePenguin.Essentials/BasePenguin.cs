@@ -1,12 +1,13 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Linq;
 using OnePenguin.Essentials.Utilities;
 
 namespace OnePenguin.Essentials
 {
-    public partial class BasePenguin : PenguinReference, IEquatable<BasePenguin>, ICloneable
+    public partial class BasePenguin : PenguinReference, IEquatable<BasePenguin>, ICloneable, INotifyPropertyChanged
     {
         public string TypeName
         {
@@ -27,6 +28,8 @@ namespace OnePenguin.Essentials
             this.ID = id;
             this.Datastore = datastore;
         }
+
+        public event PropertyChangedEventHandler PropertyChanged;
 
         public TPenguin As<TPenguin>() where TPenguin : BasePenguin
         {
@@ -80,6 +83,11 @@ namespace OnePenguin.Essentials
             result.DirtyDatastore = this.DirtyDatastore.Clone() as Datastore;
 
             return result;
+        }
+
+        public void OnPropertyChanged(string propertyName)
+        {
+            if (this.PropertyChanged != null) this.PropertyChanged(this, new PropertyChangedEventArgs(propertyName));
         }
     }
 

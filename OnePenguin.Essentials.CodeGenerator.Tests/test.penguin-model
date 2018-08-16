@@ -1,0 +1,12 @@
+{
+  "Types": [
+    {
+      "Name": "Test1",
+      "DisplayName": "Test1Display",
+      "ParentTypeName": "",
+      "Interfaces": ["IPersistable", "ITest"],
+      "Attributes": [],
+      "Relations": []
+    }
+  ]
+}

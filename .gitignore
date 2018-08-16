@@ -3,3 +3,4 @@ obj
 .vscode
 data
 /.vs/OnePenguin
+.DS_store
