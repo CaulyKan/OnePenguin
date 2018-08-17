@@ -28,6 +28,7 @@ namespace OnePenguin.Essentials.CodeGenerator
             {MetaDataType.DATETIME, typeof(DateTime)},
             {MetaDataType.STRING, typeof(string)},
         };
+        private CodeDomProvider provider;
 
         public CodeGenerator(Options options)
         {
@@ -39,7 +40,7 @@ namespace OnePenguin.Essentials.CodeGenerator
         public void Generate()
         {
             var writer = new StreamWriter(this.Options.OutputFile, false);
-            var provider = CodeDomProvider.CreateProvider("CSharp");
+            this.provider = CodeDomProvider.CreateProvider("CSharp");
 
             var compileUnit = new CodeCompileUnit();
             var codeNamespace = new CodeNamespace(this.Options.Namespace);
@@ -49,6 +50,15 @@ namespace OnePenguin.Essentials.CodeGenerator
             compileUnit.Namespaces.Add(codeNamespace);
             provider.GenerateCodeFromCompileUnit(compileUnit, writer, new CodeGeneratorOptions());
             writer.Close();
+        }
+
+        public void Compile()
+        {
+            var cp = new CompilerParameters(this.GetAllAssemblies().Select(i => i.FullName).ToArray(), this.Options.OutputDllFile, true);
+
+            cp.GenerateExecutable = false;
+
+            var cr = provider.CompileAssemblyFromFile(cp, this.Options.OutputFile);
         }
 
         private void GenerateModel(CodeNamespace codeNamespace)
@@ -66,7 +76,9 @@ namespace OnePenguin.Essentials.CodeGenerator
             resultClass.TypeAttributes = TypeAttributes.Class | TypeAttributes.Public;
             resultClass.IsPartial = true;
 
-            if (!string.IsNullOrEmpty(metaType.ParentTypeName))
+            resultClass.Members.AddRange(GenerateClassConstructors(metaType));
+
+            if (string.IsNullOrEmpty(metaType.ParentTypeName))
             {
                 resultClass.BaseTypes.Add(new CodeTypeReference(typeof(BasePenguin)));
             }
@@ -78,13 +90,43 @@ namespace OnePenguin.Essentials.CodeGenerator
             foreach (var t in GetObjectInterfaces(metaType))
             {
                 resultClass.BaseTypes.Add(new CodeTypeReference(t));
-                resultClass.Members.AddRange(CreateMembersFromInterface(metaType, t).ToArray());
             }
+            resultClass.Members.AddRange(CreateMembers(metaType).ToArray());
 
-            resultClass.CustomAttributes.Add(new CodeAttributeDeclaration("DisplayName",
+            resultClass.CustomAttributes.Add(new CodeAttributeDeclaration(typeof(DisplayNameAttribute).FullName,
                  new CodeAttributeArgument(new CodePrimitiveExpression(metaType.DisplayName))));
 
             return resultClass;
+        }
+
+        private CodeTypeMember[] GenerateClassConstructors(MetaType metaType)
+        {
+            List<CodeTypeMember> resultConstructors = new List<CodeTypeMember>();
+
+            CodeConstructor resultMethod1 = new CodeConstructor();
+            resultMethod1.Attributes = MemberAttributes.Public;
+            resultMethod1.BaseConstructorArgs.Add(new CodePrimitiveExpression(metaType.Name));
+            resultConstructors.Add(resultMethod1);
+
+            CodeConstructor resultMethod2 = new CodeConstructor();
+            resultMethod2.Attributes = MemberAttributes.Public;
+            resultMethod2.Parameters.Add(new CodeParameterDeclarationExpression(new CodeTypeReference(typeof(long)), "id"));
+            resultMethod2.Parameters.Add(new CodeParameterDeclarationExpression(new CodeTypeReference(typeof(Datastore).FullName), "dataStore"));
+            resultMethod2.BaseConstructorArgs.Add(new CodeArgumentReferenceExpression("id"));
+            resultMethod2.BaseConstructorArgs.Add(new CodeArgumentReferenceExpression("dataStore"));
+            resultMethod2.Statements.Add(
+                new CodeConditionStatement(
+                    new CodeBinaryOperatorExpression(
+                        new CodePropertyReferenceExpression(
+                            new CodeArgumentReferenceExpression("dataStore"), "TypeName"), CodeBinaryOperatorType.IdentityInequality, new CodePrimitiveExpression(metaType.Name)),
+                    new CodeThrowExceptionStatement(
+                        new CodeObjectCreateExpression(
+                            new CodeTypeReference("System.InvalidCastException"), new CodeBinaryOperatorExpression(
+                                new CodePrimitiveExpression($"该Entity的TypeId为{metaType.Name}, 而给定Datastore的TypeId为"), CodeBinaryOperatorType.Add, new CodePropertyReferenceExpression(
+                                    new CodeArgumentReferenceExpression("dataStore"), "TypeName"))))));
+            resultConstructors.Add(resultMethod2);
+
+            return resultConstructors.ToArray();
         }
 
         private IEnumerable<BaseMetaMember> GetMembers(MetaType metaType)
@@ -116,18 +158,16 @@ namespace OnePenguin.Essentials.CodeGenerator
             return result;
         }
 
-        private IEnumerable<CodeTypeMember> CreateMembersFromInterface(MetaType metaType, Type t)
+        private IEnumerable<CodeTypeMember> CreateMembers(MetaType metaType)
         {
-            foreach (var member in t.GetMembers())
+            foreach (var member in GetMembers(metaType))
             {
-                if (member.GetCustomAttribute(typeof(BaseMetaAttribute)) is BaseMetaAttribute attr)
+                if (member is BaseMetaAttribute attr)
                 {
-                    attr.Name = member.Name;
                     yield return CreateAttribute(metaType, attr);
                 }
-                else if (member.GetCustomAttribute(typeof(MetaRelation)) is MetaRelation relation)
+                else if (member is MetaRelation relation)
                 {
-                    relation.Name = member.Name;
                     yield return CreateRelation(metaType, relation);
                 }
             }
@@ -138,7 +178,10 @@ namespace OnePenguin.Essentials.CodeGenerator
             var resultRelation = new CodeMemberProperty();
 
             resultRelation.Name = relation.Name;
-            resultRelation.Type = new CodeTypeReference(typeof(PenguinReference).FullName);
+            if (relation.RelationType == MetaRelationType.ONE)
+                resultRelation.Type = new CodeTypeReference(typeof(PenguinReference).FullName);
+            else
+                resultRelation.Type = new CodeTypeReference(typeof(List<>).FullName.Replace("`1", $"<{typeof(PenguinReference).FullName}>"));
             resultRelation.Attributes = MemberAttributes.Public;
 
             if (IsInherited(metaType, relation.Name))
@@ -148,14 +191,17 @@ namespace OnePenguin.Essentials.CodeGenerator
                 new CodeTypeReference(typeof(BrowsableAttribute).FullName),
                 new CodeAttributeArgument(new CodePrimitiveExpression(false))));
 
+            var getMethod = relation.RelationType == MetaRelationType.ONE ? "GetRelation" : "GetRelations";
+            var setMethod = relation.RelationType == MetaRelationType.ONE ? "SetRelation" : "SetRelations";
+
             resultRelation.GetStatements.Add(new CodeMethodReturnStatement(
                 new CodeMethodInvokeExpression(
-                    new CodeThisReferenceExpression(), "GetRelation", new CodePrimitiveExpression(relation.Name))
+                    new CodeThisReferenceExpression(), getMethod, new CodePrimitiveExpression(relation.Name))
                 )
             );
 
             resultRelation.SetStatements.Add(new CodeMethodInvokeExpression(
-                new CodeThisReferenceExpression(), "SetRelation", new CodePrimitiveExpression(relation.Name), new CodePropertySetValueReferenceExpression()
+                new CodeThisReferenceExpression(), setMethod, new CodePrimitiveExpression(relation.Name), new CodePropertySetValueReferenceExpression()
             ));
 
             resultRelation.SetStatements.Add(new CodeMethodInvokeExpression(

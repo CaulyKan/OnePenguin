@@ -5,8 +5,20 @@
       "DisplayName": "Test1Display",
       "ParentTypeName": "",
       "Interfaces": ["IPersistable", "ITest"],
-      "Attributes": [],
-      "Relations": []
+      "Attributes": [
+        {
+          "DataType": "INT",
+          "Name": "Test2",
+          "DisplayName": "Test2Display"
+        }
+      ],
+      "Relations": [
+        {
+          "Name": "TestRelation2",
+          "TargetTypeName": "Test1",
+          "RelationType": "MANY"
+        }
+      ]
     }
   ]
 }

@@ -14,6 +14,8 @@ namespace OnePenguin.Essentials.CodeGenerator
             {
                 var generator = new CodeGenerator(options);
                 generator.Generate();
+                if (!string.IsNullOrEmpty(options.OutputDllFile))
+                    generator.Compile();
             });
         }
     }
@@ -25,6 +27,9 @@ namespace OnePenguin.Essentials.CodeGenerator
 
         [Option('o', "output", Required = true, HelpText = "The output cs file.")]
         public string OutputFile { get; set; }
+
+        [Option('d', "dll", Required = false, HelpText = "The output dll file.")]
+        public string OutputDllFile { get; set; }
 
         [Option('a', "assemblies", Required = false, HelpText = "Assemblies to load.")]
         public IEnumerable<string> Assemblies { get; set; }
