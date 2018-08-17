@@ -30,8 +30,6 @@ namespace OnePenguin.Essentials.CodeGenerator.Tests
 
             generator.Generate();
 
-            string result = File.ReadAllText(generator.Options.OutputFile);
-            Console.WriteLine(result);
             //generator.Compile();
 
             if (!File.Exists(generatedFile) || !CompareFiles(Path.Combine(outputPath, "_test.cs"), generatedFile))
@@ -41,6 +39,45 @@ namespace OnePenguin.Essentials.CodeGenerator.Tests
             }
             else
             {
+                var t = Assembly.GetExecutingAssembly().GetType("OnePenguin.Essentials.CodeGenerator.Tests.Test.Test1Penguin");
+                Assert.NotNull(t);
+
+                var props = t.GetProperties().ToList();
+                var penguin = Activator.CreateInstance(t) as BasePenguin;
+
+                Assert.True(props.Exists(i => i.Name == "TestInt"));
+                props.Find(i => i.Name == "TestInt").SetValue(penguin, 123);
+                Assert.Equal(123L, penguin.DirtyDatastore.Attributes["TestInt"]);
+                Assert.Equal(123L, props.Find(i => i.Name == "TestInt").GetValue(penguin));
+
+                Assert.True(props.Exists(i => i.Name == "TestInt2"));
+                props.Find(i => i.Name == "TestInt2").SetValue(penguin, 123);
+                Assert.Equal(123L, penguin.DirtyDatastore.Attributes["TestInt2"]);
+                Assert.Equal(123L, props.Find(i => i.Name == "TestInt2").GetValue(penguin));
+
+                var dt = DateTime.Now;
+                Assert.True(props.Exists(i => i.Name == "TestDateTime"));
+                props.Find(i => i.Name == "TestDateTime").SetValue(penguin, dt);
+                Assert.Equal(dt, penguin.DirtyDatastore.Attributes["TestDateTime"]);
+                Assert.Equal(dt, props.Find(i => i.Name == "TestDateTime").GetValue(penguin));
+
+                Assert.True(props.Exists(i => i.Name == "TestString"));
+                props.Find(i => i.Name == "TestString").SetValue(penguin, "123");
+                Assert.Equal("123", penguin.DirtyDatastore.Attributes["TestString"]);
+                Assert.Equal("123", props.Find(i => i.Name == "TestString").GetValue(penguin));
+
+                var relatedPenguin = new BasePenguin(1, new Datastore("test"));
+
+                Assert.True(props.Exists(i => i.Name == "TestRelation"));
+                props.Find(i => i.Name == "TestRelation").SetValue(penguin, relatedPenguin);
+                Assert.Equal(new PenguinReference(relatedPenguin.ID.Value), penguin.DirtyDatastore.Relations["TestRelation"].First().Target);
+                Assert.Equal(new PenguinReference(relatedPenguin.ID.Value), props.Find(i => i.Name == "TestRelation").GetValue(penguin));
+
+                Assert.True(props.Exists(i => i.Name == "TestRelation2"));
+                props.Find(i => i.Name == "TestRelation2").SetValue(penguin, new List<PenguinReference> { relatedPenguin });
+                Assert.Equal(relatedPenguin.ID.Value, penguin.DirtyDatastore.Relations["TestRelation2"].First().Target.ID.Value);
+                Assert.Equal(new List<PenguinReference> { relatedPenguin }, props.Find(i => i.Name == "TestRelation2").GetValue(penguin));
+
                 File.Delete(generatedFile);
             }
         }
