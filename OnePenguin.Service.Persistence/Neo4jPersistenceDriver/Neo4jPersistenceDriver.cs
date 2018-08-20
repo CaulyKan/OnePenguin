@@ -12,6 +12,7 @@ namespace OnePenguin.Service.Persistence.Neo4jPersistenceDriver
     {
         private readonly Microsoft.Extensions.Logging.ILogger logger;
         private IDriver driver;
+        private TransactionInfo transactionInfo;
 
         public Neo4jPersistenceDriver(IConfiguration config) : this(config["neo4j_uri"], config["neo4j_user"], config["neo4j_passwd"]) { }
 
@@ -31,10 +32,15 @@ namespace OnePenguin.Service.Persistence.Neo4jPersistenceDriver
         {
             try
             {
-                if (this.transactionInfo.Key != null)
-                    return Neo4jPersistenceImpl.GetPenguinById(this.transactionInfo.Key, id);
-                else using (var session = driver.Session())
+                if (this.transactionInfo != null)
+                {
+                    return Neo4jPersistenceImpl.GetPenguinById(this.transactionInfo.Session, id);
+                }
+                else
+                {
+                    using (var session = driver.Session())
                         return Neo4jPersistenceImpl.GetPenguinById(session, id);
+                }
             }
             catch (Exception e)
             {
@@ -65,50 +71,64 @@ namespace OnePenguin.Service.Persistence.Neo4jPersistenceDriver
 
         public void RunTransaction(Action<IPenguinPersistenceContext> contextAction)
         {
-            using (var session = driver.Session())
+            if (this.transactionInfo == null)
             {
-                session.WriteTransaction(tx =>
+                using (var session = driver.Session())
                 {
-                    var context = new Neo4jPersistenceContext(tx);
-                    contextAction(context);
-                });
+                    session.WriteTransaction(tx =>
+                    {
+                        var context = new Neo4jPersistenceContext(tx);
+                        contextAction(context);
+                    });
+                }
+            }
+            else
+            {
+                contextAction(this.transactionInfo.Context);
             }
         }
 
-        private KeyValuePair<ISession, ITransaction> transactionInfo;
         public IPenguinPersistenceContext StartTransaction()
         {
+            if (transactionInfo != null) throw new PersistenceException("Already in transaction.");
             var session = driver.Session();
             var transaction = session.BeginTransaction();
-            transactionInfo = new KeyValuePair<ISession, ITransaction>(session, transaction);
             var context = new Neo4jPersistenceContext(transaction);
+            transactionInfo = new TransactionInfo { Session = session, Transaction = transaction, Context = context };
             return context;
         }
 
         public void Commit()
         {
-            if (transactionInfo.Value != null)
+            if (transactionInfo != null)
             {
-                this.transactionInfo.Value.CommitAsync().Wait();
-                this.transactionInfo.Value.Dispose();
-                this.transactionInfo.Key.Dispose();
+                this.transactionInfo.Transaction.CommitAsync().Wait();
+                this.transactionInfo.Transaction.Dispose();
+                this.transactionInfo.Session.Dispose();
             }
-            transactionInfo = new KeyValuePair<ISession, ITransaction>(null, null);
+            transactionInfo = null;
         }
 
         public void Rollback()
         {
-            if (transactionInfo.Value != null)
+            if (transactionInfo != null)
             {
-                this.transactionInfo.Value.RollbackAsync().Wait();
-                this.transactionInfo.Value.Dispose();
-                this.transactionInfo.Key.Dispose();
+                this.transactionInfo.Transaction.RollbackAsync().Wait();
+                this.transactionInfo.Transaction.Dispose();
+                this.transactionInfo.Session.Dispose();
             }
-            transactionInfo = new KeyValuePair<ISession, ITransaction>(null, null);
+            transactionInfo = null;
+        }
+
+        public class TransactionInfo
+        {
+            public ISession Session { get; set; }
+            public ITransaction Transaction { get; set; }
+            public Neo4jPersistenceContext Context { get; set; }
         }
     }
 
-    public class Neo4jPersistenceContext : IPenguinPersistenceContext
+    public class Neo4jPersistenceContext : BasePenguinPersistenceDriver, IPenguinPersistenceContext
     {
         private ITransaction transaction;
 
@@ -117,12 +137,7 @@ namespace OnePenguin.Service.Persistence.Neo4jPersistenceDriver
             this.transaction = transaction;
         }
 
-        public void Delete(BasePenguin penguin)
-        {
-            this.Delete(new List<BasePenguin> { penguin });
-        }
-
-        public void Delete(List<BasePenguin> penguins)
+        public override void Delete(List<BasePenguin> penguins)
         {
             try
             {
@@ -134,27 +149,12 @@ namespace OnePenguin.Service.Persistence.Neo4jPersistenceDriver
             }
         }
 
-        public void Delete<TPenguin>(TPenguin penguin) where TPenguin : BasePenguin
-        {
-            this.Delete(penguin as BasePenguin);
-        }
-
-        public void Delete<TPenguin>(List<TPenguin> penguins) where TPenguin : BasePenguin
-        {
-            this.Delete(penguins.ConvertAll(i => i as BasePenguin));
-        }
-
         public void Dispose()
         {
             this.transaction.Dispose();
         }
 
-        public BasePenguin Insert(BasePenguin penguin)
-        {
-            return this.Insert(new List<BasePenguin> { penguin })[0];
-        }
-
-        public List<BasePenguin> Insert(List<BasePenguin> penguins)
+        public override List<BasePenguin> Insert(List<BasePenguin> penguins)
         {
             try
             {
@@ -166,22 +166,7 @@ namespace OnePenguin.Service.Persistence.Neo4jPersistenceDriver
             }
         }
 
-        public TPenguin Insert<TPenguin>(TPenguin penguin) where TPenguin : BasePenguin
-        {
-            return this.Insert(penguin as BasePenguin) as TPenguin;
-        }
-
-        public List<TPenguin> Insert<TPenguin>(List<TPenguin> penguin) where TPenguin : BasePenguin
-        {
-            return this.Insert(penguin.ConvertAll(i => i as BasePenguin)).ConvertAll(i => i.As<TPenguin>());
-        }
-
-        public BasePenguin Update(BasePenguin penguin)
-        {
-            return this.Update(new List<BasePenguin> { penguin })[0];
-        }
-
-        public List<BasePenguin> Update(List<BasePenguin> penguin)
+        public override List<BasePenguin> Update(List<BasePenguin> penguin)
         {
             try
             {
@@ -191,16 +176,6 @@ namespace OnePenguin.Service.Persistence.Neo4jPersistenceDriver
             {
                 throw new PersistenceException($"{nameof(Neo4jPersistenceDriver)}: UpdatePenguin() failed: {e.Message}", e);
             }
-        }
-
-        public TPenguin Update<TPenguin>(TPenguin penguin) where TPenguin : BasePenguin
-        {
-            return this.Update(penguin as BasePenguin) as TPenguin;
-        }
-
-        public List<TPenguin> Update<TPenguin>(List<TPenguin> penguin) where TPenguin : BasePenguin
-        {
-            return this.Update(penguin.ConvertAll(i => i as BasePenguin)).ConvertAll(i => i.As<TPenguin>());
         }
     }
 }
